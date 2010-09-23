@@ -2,7 +2,6 @@ var wiiusej = Packages.wiiusej,
 	System = java.lang.System,
 	Thread = java.lang.Thread,
 	Math = java.lang.Math,
-	Runnable = java.lang.Runnable,
 	Date = java.util.Date;
 
 var console = {
@@ -29,7 +28,11 @@ function setTimeout(callback, delay) {
 function clearTimeout(id) {
 	delete timeouts(id);
 }
+var running = false;
 function loop() {
+	if (running)
+		return;
+	running = true;
 	while (System['in'].available() == 0) {
 		Thread.sleep(15);
 		for (id in timeouts) {
@@ -64,7 +67,7 @@ function $(selector) {
 	return {
 		bind: function(type, callback) {
 			if (type == "motion") {
-				var lastLevel = 
+				var lastLevel;
 				mote.activateMotionSensing();
 				mote.addWiiMoteEventListeners(new wiiusej.wiiusejevents.utils.WiimoteListener() {
 					onStatusEvent: function(e) {
@@ -91,6 +94,7 @@ function $(selector) {
 					}
 				});
 				mote.getStatus();
+				loop();
 			}
 		},
 		led: function(one, two, three, four) {
@@ -117,5 +121,3 @@ $("wiimote").bind("motion", function(event) {
 		}, 150);
 	}
 });
-
-loop();
