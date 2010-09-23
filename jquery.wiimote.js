@@ -1,20 +1,46 @@
 var wiiusej = Packages.wiiusej,
 	System = java.lang.System,
-	Thread = java.lang.Thread
+	Thread = java.lang.Thread,
+	Math = java.lang.Math,
 	Runnable = java.lang.Runnable,
-	ScheduledThreadPoolExecutor = java.util.concurrent.ScheduledThreadPoolExecutor,
-	MS = java.util.concurrent.TimeUnit.MILLISECONDS;
+	Date = java.util.Date;
 
-var executor;
-function setTimeout(callback, delay) {
-	if (!executor) {
-		executor = new ScheduledThreadPoolExecutor(1);
+var console = {
+	log: function(message) {
+		println(message)
 	}
-	executor.schedule(new Runnable() {
-		run: function() {
-			callback();
+}
+
+var timeouts = {},
+	timeoutId;
+function setTimeout(callback, delay) {
+	if (!delay)
+		throw new Error("can't setTimeout without delay");
+	var id = timeoutId++;
+	timeouts[id] = {
+		callback: callback,
+		duetime: new Date().getTime() + delay,
+		due: function() {
+			return new Date().getTime() >= this.duetime;
 		}
-	}, delay, MS);
+	}
+	return id;
+}
+function clearTimeout(id) {
+	delete timeouts(id);
+}
+function loop() {
+	while (System['in'].available() == 0) {
+		Thread.sleep(15);
+		for (id in timeouts) {
+			var timeout = timeouts[id];
+			if (timeout.due()) {
+				clearTimeout(id);
+				timeout.callback();
+			}
+		}
+	}
+	wiiusej.WiiUseApiManager.definitiveShutdown();
 }
 
 function $(selector) {
@@ -38,9 +64,15 @@ function $(selector) {
 	return {
 		bind: function(type, callback) {
 			if (type == "motion") {
+				var lastLevel = 
 				mote.activateMotionSensing();
 				mote.addWiiMoteEventListeners(new wiiusej.wiiusejevents.utils.WiimoteListener() {
 					onStatusEvent: function(e) {
+						var level = Math.round(e.getBatteryLevel() * 100);
+						if (level != lastLevel) {
+							console.log("Battery left: " + level + "%");
+						}
+						lastLevel = level;
 					},
 					onButtonsEvent: function(e) {
 						if (e.isButtonHomeJustReleased()) {
@@ -58,6 +90,7 @@ function $(selector) {
 						});
 					}
 				});
+				mote.getStatus();
 			}
 		},
 		led: function(one, two, three, four) {
@@ -66,17 +99,23 @@ function $(selector) {
 	};
 };
 
-$("wiimote").bind("motion", function(e) {
+$("wiimote").bind("motion", function(event) {
 	var mote = $(this);
-	if (e.rawAcceleration.x > 200) {
-		mote.led(0, 1, 1, 0);
+	if (event.rawAcceleration.x > 200) {
+		mote.led(1, 1, 1, 1);
 		setTimeout(function() {
-			mote.led(0, 0, 0, 0);
-		}, 500);
+			mote.led(1, 1, 1, 0);
+			setTimeout(function() {
+				mote.led(1, 1, 0, 0);
+				setTimeout(function() {
+					mote.led(1, 0, 0, 0);
+					setTimeout(function() {
+						mote.led(0, 0, 0, 0);
+					}, 150);
+				}, 150);
+			}, 150);
+		}, 150);
 	}
 });
 
-while (System['in'].available() == 0) {
-	Thread.sleep(500);
-}
-wiiusej.WiiUseApiManager.definitiveShutdown();
+loop();
